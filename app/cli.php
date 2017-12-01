@@ -19,6 +19,15 @@ $loader->registerDirs(
     ]
 );
 
+$loader->registerNamespaces(
+    [
+        "App\Parsers"    => __DIR__ . "/parsers",
+        'App\Parsers\Services' => __DIR__ . "/parsers/services",
+        'App\Parsers\Contracts' => __DIR__ . "/parsers/contracts",
+        "App\Models"    => __DIR__ . "/models",
+    ]
+);
+
 $loader->register();
 
 // Загрузка файла конфигурации (если есть)
@@ -30,10 +39,13 @@ if (is_readable($configFile)) {
     $di->set('config', $config);
 }
 
+$di->set('parser', new App\Parsers\Parser());
+
 // Создание консольного приложения
 $console = new ConsoleApp();
 
 $console->setDI($di);
+
 
 /**
  * Обработка аргументов консоли

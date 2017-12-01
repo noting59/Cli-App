@@ -1,21 +1,22 @@
 <?php
-/**
- * Created by PhpStorm.
- * User: vlad
- * Date: 01.12.17
- * Time: 0:09
- */
 
 namespace App\Parsers;
 
+use App\Parsers\Services\YandexParser as YandexParser;
 
+/**
+ * Factory pattern for parsers
+ *
+ * Class FactoryParser
+ * @package App\Parsers
+ */
 abstract class FactoryParser
 {
-    public function parse(String $service):mixed
+    public function parse(String $service, String $searchText) : mixed
     {
         switch ($service) {
             case 'yandex':
-                return new YandexParser($service);
+                return new YandexParser($searchText);
             default:
                 return false;
         }
