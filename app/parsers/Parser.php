@@ -25,7 +25,7 @@ class Parser extends FactoryParser
 
         if(!$result)
         {
-            throw new \HttpException('Can`t fetch page');
+            throw new \Error('Can`t fetch page');
         }
 
         return $result;
