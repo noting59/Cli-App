@@ -12,11 +12,11 @@ use App\Parsers\Services\YandexParser as YandexParser;
  */
 abstract class FactoryParser
 {
-    public function parse(String $service, String $searchText) : mixed
+    public function parse(String $service, String $searchText, Parser $parser) : mixed
     {
         switch ($service) {
             case 'yandex':
-                return new YandexParser($searchText);
+                return new YandexParser($searchText, $parser);
             default:
                 return false;
         }

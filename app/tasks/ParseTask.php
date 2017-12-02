@@ -18,6 +18,6 @@ class ParseTask extends Task
             return;
         };
 
-        $this->di->get('parser')->parse('yandex', $params[0]);
+        $this->di->get('parser')->parse('yandex', $params[0], $this->di->get('parser'));
     }
 }

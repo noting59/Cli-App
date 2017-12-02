@@ -4,36 +4,42 @@ namespace App\Parsers\Services;
 
 use App\Parsers\Contracts\ParserContract as ParserContract;
 use App\Models\Tracks as Tracks;
+use App\Parsers\Parser;
 
 class YandexParser implements ParserContract
 {
-    private $trackName;
+    private $parser;
 
-    public function __construct(String $trackName)
+    public function __construct(String $trackName, Parser $parser)
     {
-        $this->trackName = $trackName;
-        $tracks = $this->findTracks($this->trackName);
+        $this->parser = $parser;
+
+        $tracks = $this->findTracks($trackName);
         $this->save($tracks);
     }
 
-    public function findTracks(String $trackName): array
+    public function findTracks(String $trackName) : array
     {
-        $trackName = $this->removeQoutes($trackName);
+        $trackName = $this->removeQuotes($trackName);
 
-        $this->PhantomRequest($trackName);
+        $content = $this->fetchPage($trackName);
 
-        $this->searchTracks($this->PhantomRequest($trackName));
+        $tracks = $this->searchTracks($content);
+
+        foreach ($tracks as $key => $value) {
+            $tracks[$key]['track_download_url'] = $this->getDownloadLink($value);
+        }
 
         return $tracks;
     }
 
-    public function save(Array $tracks) : bool
+    public function save(Array $tracks): bool
     {
-        foreach ($tracks as $item) {
+        foreach ($tracks as $track) {
             $track = new Tracks;
 
-            $track->setName();
-            $track->setDownloadLink();
+            $track->setName($track['track_name']);
+            $track->setDownloadLink($track['track_download_url']);
             $track->setService('yandex');
 
             $track->save();
@@ -42,43 +48,19 @@ class YandexParser implements ParserContract
         return true;
     }
 
-    private function removeQoutes(String $trackname) : String
+    private function removeQuotes(String $trackname): String
     {
         return str_replace(array('"', "'"), '', $trackname);
     }
 
-    private function PhantomRequest(String $trackname) : string
+    private function fetchPage(String $trackname): String
     {
-        $jsonString = '{
-            "url": "https://music.yandex.ru/search?text=' . $trackname . '",
-            "renderType": "plainText",
-            "outputAsJson": true,
-            "suppressJson": false,
-            "requestSettings": {
-              "clearCache": true,
-              "userAgent": "Mozilla/5.0 (Windows NT 6.2; WOW64) AppleWebKit/534.34 (KHTML, like Gecko) Safari/534.34 PhantomJS/2.0.0 (PhantomJsCloud.com/2.0.1)",
-            }
-        }';
+        $result = $this->parser->curlRequest("https://music.yandex.ru/search?text=" . $trackname);
 
-
-        $url = 'http://phantomjscloud.com/api/browser/v2/ak-pewrc-az5ah-zar40-f3crm-t00ah/';
-        $options = array(
-            "http" => array(
-                "header"  => "Content-type: application/json",
-                "method"  => "POST",
-                "content" => $jsonString,
-            )
-        );
-
-        $context = stream_context_create($options);
-        $result = file_get_contents($url, false, $context);
-
-        $result = json_decode($result, JSON_NUMERIC_CHECK|JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE);
-
-        return $result["pageResponses"][0]["frameData"]["content"];
+        return $result;
     }
 
-    private function searchTracks(String $content) : array
+    private function searchTracks(String $content): array
     {
         $tracks = [];
 
@@ -91,14 +73,64 @@ class YandexParser implements ParserContract
         foreach ($searchNodesA as $searchNodeA) {
             $classNameA = $searchNodeA->getAttribute('class');
 
-            if(strpos($classNameA, 'd-track__title') !== false) {
-                $tracks[] = $searchNodeA->getAttribute('href');
+            if (strpos($classNameA, 'd-track__title') !== false) {
+                $tracks[] = [
+                    'track_id' => basename($searchNodeA->getAttribute('href')), '
+                    track_name' => $searchNodeA->nodeValue . ' - ' . $searchNodeA->getAttribute('title')
+                ];
             }
 
         }
 
-        var_dump($tracks);
+        if (empty($tracks)) {
+            throw new \Error('No songs found');
+        }
 
         return $tracks;
+    }
+
+    private function getDownloadLink(Array $track): string
+    {
+        $trackSrc = $this->findTrackSrc($track['track_id'] . '&format=json');
+
+        $trackDetails = $this->getTrackDetails($trackSrc);
+
+        $link = $this->buildDownloadUrl($trackDetails);
+
+        return $link;
+    }
+
+    private function findTrackSrc(Int $track_id): String
+    {
+        $this->parser->curlOptions[CURLOPT_HTTPHEADER] = [
+            'Content-Type: application/json',
+            'X-Retpath-Y: ' . urlencode("https://music.yandex.ru/"),
+            'Referer: https://music.yandex.ru/'
+        ];
+
+        $result = $this->parser->curlRequest("https://music.yandex.ru/api/v2.1/handlers/track/" . $track_id . "/track/download/m?hq=1");
+
+        $result = json_decode($result, true);
+
+        return $result['src'];
+    }
+
+    private function getTrackDetails(String $trackSrc) : array
+    {
+        $this->parser->curlOptions[CURLOPT_HTTPHEADER] = [
+            'X-Retpath-Y: ' . urlencode("https://music.yandex.ru/")
+        ];
+
+        $result = $this->parser->curlRequest($trackSrc);
+
+        return $result;
+    }
+
+    private function buildDownloadUrl(Array $trackDetails) : string
+    {
+        $salt = 'XGRlBW9FXlekgbPrRHuSiA';
+        $hash = md5($salt . substr($trackDetails['path'], 1) . $trackDetails['s']);
+
+        return 'https://' . $trackDetails['host'] . '/get-mp3/' . $hash . '/' . $trackDetails['ts'] . $trackDetails['path'];
     }
 }
