@@ -15,6 +15,13 @@ class Parser extends FactoryParser
         CURLOPT_SSL_VERIFYHOST => false,
     ];
 
+    /**
+     * Make curl requests with options
+     *
+     * @param $url
+     * @return String
+     * @throws \Error
+     */
     public function curlRequest($url) : String
     {
         $curl = curl_init($url);

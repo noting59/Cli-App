@@ -18,6 +18,12 @@ class YandexParser implements ParserContract
         $this->save($tracks);
     }
 
+    /**
+     * Implements interface, search for tracks
+     *
+     * @param String $trackName
+     * @return array
+     */
     public function findTracks(String $trackName) : array
     {
         $trackName = $this->removeQuotes($trackName);
@@ -33,13 +39,21 @@ class YandexParser implements ParserContract
         return $tracks;
     }
 
+    /**
+     * Implements interface, save tracks to db
+     *
+     * @param array $tracks
+     * @return bool
+     */
     public function save(Array $tracks): bool
     {
-        foreach ($tracks as $track) {
-            $track = new Tracks;
+        foreach ($tracks as $key => $value) {
+            $track = new Tracks();
 
-            $track->setName($track['track_name']);
-            $track->setDownloadLink($track['track_download_url']);
+            //TODO Change model for not saving same tracks to db
+
+            $track->setName($value['track_name']);
+            $track->setDownloadLink($value['track_download_url']);
             $track->setService('yandex');
 
             $track->save();
@@ -48,18 +62,37 @@ class YandexParser implements ParserContract
         return true;
     }
 
+    /**
+     * Remove quotes from search string passed from CLI arguments
+     *
+     * @param String $trackname
+     * @return String
+     */
     private function removeQuotes(String $trackname): String
     {
         return str_replace(array('"', "'"), '', $trackname);
     }
 
+    /**
+     * Fetch DOM as text from https://music.yandex.ru
+     *
+     * @param String $trackname
+     * @return String
+     */
     private function fetchPage(String $trackname): String
     {
-        $result = $this->parser->curlRequest("https://music.yandex.ru/search?text=" . $trackname);
+        $result = $this->parser->curlRequest("https://music.yandex.ru/search?text=" . urlencode($trackname));
 
         return $result;
     }
 
+    /**
+     * Make search through DOM and find track id and track name
+     *
+     * @param String $content
+     * @return array
+     * @throws \Error
+     */
     private function searchTracks(String $content): array
     {
         $tracks = [];
@@ -75,8 +108,8 @@ class YandexParser implements ParserContract
 
             if (strpos($classNameA, 'd-track__title') !== false) {
                 $tracks[] = [
-                    'track_id' => basename($searchNodeA->getAttribute('href')), '
-                    track_name' => $searchNodeA->nodeValue . ' - ' . $searchNodeA->getAttribute('title')
+                    'track_id' => basename($searchNodeA->getAttribute('href')),
+                    'track_name' => $searchNodeA->nodeValue . ' - ' . $searchNodeA->getAttribute('title')
                 ];
             }
 
@@ -89,9 +122,15 @@ class YandexParser implements ParserContract
         return $tracks;
     }
 
+    /**
+     * Return download link for track
+     *
+     * @param array $track
+     * @return string
+     */
     private function getDownloadLink(Array $track): string
     {
-        $trackSrc = $this->findTrackSrc($track['track_id'] . '&format=json');
+        $trackSrc = $this->findTrackSrc($track['track_id']);
 
         $trackDetails = $this->getTrackDetails($trackSrc);
 
@@ -100,7 +139,13 @@ class YandexParser implements ParserContract
         return $link;
     }
 
-    private function findTrackSrc(Int $track_id): String
+    /**
+     * Looking for track src and return it
+     *
+     * @param String $track_id
+     * @return string
+     */
+    private function findTrackSrc(String $track_id): string
     {
         $this->parser->curlOptions[CURLOPT_HTTPHEADER] = [
             'Content-Type: application/json',
@@ -115,17 +160,29 @@ class YandexParser implements ParserContract
         return $result['src'];
     }
 
+    /**
+     * Get track details for download link
+     *
+     * @param String $trackSrc
+     * @return array
+     */
     private function getTrackDetails(String $trackSrc) : array
     {
         $this->parser->curlOptions[CURLOPT_HTTPHEADER] = [
             'X-Retpath-Y: ' . urlencode("https://music.yandex.ru/")
         ];
 
-        $result = $this->parser->curlRequest($trackSrc);
+        $result = $this->parser->curlRequest($trackSrc . '&format=json');
 
-        return $result;
+        return json_decode($result, true);
     }
 
+    /**
+     * Build download link
+     *
+     * @param array $trackDetails
+     * @return string
+     */
     private function buildDownloadUrl(Array $trackDetails) : string
     {
         $salt = 'XGRlBW9FXlekgbPrRHuSiA';

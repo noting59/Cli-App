@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Models\Tracks;
+namespace App\Models;
 
 class Tracks extends \Phalcon\Mvc\Model
 {
